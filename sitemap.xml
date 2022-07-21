@@ -1,27 +1,27 @@
-<?xml-stylesheet type="text/xsl" href="miyabyte.github.io/sitemap.xsl"?>
+<?xml-stylesheet type="text/xsl" href="https://miyabyte.github.io/sitemap.xsl"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
-    <loc>miyabyte.github.io/posts/first/</loc>
+    <loc>https://miyabyte.github.io/posts/first/</loc>
     <lastmod>2022-07-21T15:05:00+08:00</lastmod>
   </url>
   
   <url>
-    <loc>miyabyte.github.io/</loc>
+    <loc>https://miyabyte.github.io/</loc>
     <lastmod>2022-07-21T15:05:00+08:00</lastmod>
   </url>
   
   <url>
-    <loc>miyabyte.github.io/posts/</loc>
+    <loc>https://miyabyte.github.io/posts/</loc>
     <lastmod>2022-07-21T15:05:00+08:00</lastmod>
   </url>
   
   <url>
-    <loc>miyabyte.github.io/categories/</loc>
+    <loc>https://miyabyte.github.io/categories/</loc>
   </url>
   
   <url>
-    <loc>miyabyte.github.io/tags/</loc>
+    <loc>https://miyabyte.github.io/tags/</loc>
   </url>
   
 </urlset>
