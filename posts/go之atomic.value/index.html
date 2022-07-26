@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en-us" itemscope itemtype="http://schema.org/WebPage">
+<head>
+  <meta name="generator" content="Hugo 0.101.0" />
+  <meta charset="utf-8">
+  <title>go之atomic.value · miya</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="引言： Golang是一个静态类型的编译语言，有着多线程的GMP模型，可以使用go关键字很方便地实现多线程运算，将运算同时作用在不同物理处理器" />
+
+
+<link rel="canonical" href="https://miyabyte.github.io/posts/go%E4%B9%8Batomic.value/" />
+
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css" integrity="sha384-hWVjflwFxL6sNzntih27bfxkr27PmbbK/iSvJ+a4+0owXq79v+lsFkW54bOGbiDQ" crossorigin="anonymous">
+<link rel="stylesheet" href="https://miyabyte.github.io/css/den.css">
+
+
+
+
+<meta property="og:title" content="go之atomic.value" />
+<meta property="og:description" content="引言： Golang是一个静态类型的编译语言，有着多线程的GMP模型，可以使用go关键字很方便地实现多线程运算，将运算同时作用在不同物理处理器" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://miyabyte.github.io/posts/go%E4%B9%8Batomic.value/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-07-21T15:05:00+08:00" />
+<meta property="article:modified_time" content="2022-07-21T15:05:00+08:00" />
+
+<meta itemprop="name" content="go之atomic.value">
+<meta itemprop="description" content="引言： Golang是一个静态类型的编译语言，有着多线程的GMP模型，可以使用go关键字很方便地实现多线程运算，将运算同时作用在不同物理处理器"><meta itemprop="datePublished" content="2022-07-21T15:05:00+08:00" />
+<meta itemprop="dateModified" content="2022-07-21T15:05:00+08:00" />
+<meta itemprop="wordCount" content="2154">
+<meta itemprop="keywords" content="" /><meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="go之atomic.value"/>
+<meta name="twitter:description" content="引言： Golang是一个静态类型的编译语言，有着多线程的GMP模型，可以使用go关键字很方便地实现多线程运算，将运算同时作用在不同物理处理器"/>
+</head>
+<body>
+  
+  <div class="header-container gradient">
+  <div class="container">
+  <nav class="header-nav navbar navbar-expand-md navbar-dark light-dark">
+    <div class="header-logo navbar-brand">
+      
+        <a class="float-left" href="https://miyabyte.github.io/">
+      
+        
+        
+          miya
+         
+      </a>
+    </div>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="nav-menu collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav">
+        
+        
+      </ul>
+    </div>
+  </nav>
+</div>
+
+<div class="container header-wrapper">
+  <div class="row">
+    <div class="col-lg-12">
+      <div class="header-content">
+        <h1 class="header-title">go之atomic.value</h1>
+        <p class="header-date">
+        Thu 21 July 2022
+        <div class="header-underline"></div>
+        
+        
+
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div>
+  <main>
+<div class="container content">
+  <article>
+  <p>引言：
+Golang是一个静态类型的编译语言，有着多线程的GMP模型，可以使用go关键字很方便地实现多线程运算，将运算同时作用在不同物理处理器上并发运行，充分利用多cpu性能。
+Go做到了让我们在单一的逻辑处理器的情况下也可以调度数十万 goroutine 以惊人的效率和性能并发运行的成果但其内存模型也给我们提了要求：
+To serialize access, protect the data with channel operations or other synchronization primitives such as those in the sync and sync/atomic  packages.
+当多个goroutine同时使用同一个变量时，要正常访问，请使用通道操作或其他同步原语(如 sync 和 sync/atomic)来保证并发安全。</p>
+<p>例子：
+比如下边这个例子暴露了容易犯的错误，
+str 来源于 strMap的赋值 ，所以其值一定是map里的一个，但事实上确能打印出很多莫名其妙的值。</p>
+<p>解析：
+造成以上问题的原因有多个方面，即便在单核CPU中一行代码也会被编译为多条指令(CPU每次处理的数据有限（32、64），再加上CPU缓存、指令重排等很多底层操作)（下文继续会补充）
+使得例子中的简单赋值（str=strMap[0]）并不是所看到的具有原子性，因有很多我们看不到的步骤在被CPU执行，而CPU看来这些步骤没有关联，所以也不会去保证其结果和想想中一致。</p>
+<p>从底层角度看问题</p>
+<p>CPU厂商在CPU中内置了多级高速缓存以解决CPU运算与内存操作之间速度不匹配问题。
+带有高速缓存的CPU执行计算的流程 ：
+程序以及数据被加载到主内存
+指令和数据被加载到CPU的高速缓存
+CPU执行指令，把结果写到高速缓存
+高速缓存中的数据写回主内存</p>
+<p>错误例子：
+多核CPU并发加减读取时，假设CPU两个核接到了++操作,会因为CPU缓存不一致而导致了最后取得了错误的结果。</p>
+<p>多级缓存情境下，需要了解的一致性策略来保证每个核中缓存的变量是正确的值：
+Bus Lock:
+当CPU发出一个原子操作时，可以先锁住Bus（总线）。这样就可以防止其他CPU的内存操作。等原子操作结束，释放Bus。这样后续的内存操作就可以进行。</p>
+<p>MESI协议:
+通过 （1、修改（M） 2、独占（E）3、共享（S） 4、无效（I））四种状态来标记缓存行的使用状态，来避免每次操作都需要占用总线，也是目前使用最广的协议。
+MESI 只能解决部分锁总线拖慢CPU的问题。但为了更高的速度最后并没有做到强一致性，其不保证多线程下变量写入与读取的顺序一致（随之而来的store buffer、指令重排、invalid queue 等概念）同时提出了使用内存屏障保证强一致性。</p>
+<p>内存屏障:
+内存屏障的作用是前边的读写操作未完成的情况下，后面的读写操作不能发生。就像给操作加了一把锁（同时写屏障还屏蔽了CPU的乱序执行）。
+操作系统提供了相应的API供我们使用，linux为例：
+rmb()	读内存屏障，阻止跨越屏障的载入动作发生重排序
+wmb()	写内存屏障，阻止跨越屏障的存储动作发生重排序
+mb()	读写内存屏障，阻止跨越屏障的载入和存储动作重新排序
+在解决缓存一致的同时也解决了编译器的指令重排、 CPU 的乱序执行，总之是帮我们保证一致性。</p>
+<p>从golang的角度看问题：
+上边阐述了一句golang代码被CPU执行到内存时会发生不可预知的错误的理论，知道了这种错误的(部分)根源，防止以为是自己眼花了而去看眼科。
+与此同时 我们又了解了CPU 设计者提出了&quot;内存屏障&quot; 给我们使用来保证强一致性。</p>
+<p>因为GO是编译型语言同时有着自己的调度模型、内存模型。所以在golang中要解决这个一致性问题也需要考虑这两个方面。
+内存模型明确声明了：对于一个 Goroutine 而言，一个变量被写入后一定能够被读取到（并没有保证多goroutine时的状态）。
+同时想要保证原子操作，还要确保调度模型不出问题。</p>
+<p>解决方式
+使用锁：</p>
+<p>既然CPU不像我们人脑一样具有逻辑，那么就给代码加上逻辑，将赋值和读取操作前后加锁，保证赋值和读取这两步不会受到莫名其妙的影响。
+此写法内部调用了 CompareAndSwapInt32   LockSlow 使用了乐观锁的概念，协程的不断切换影响效率。
+这个问题必定普遍存在，而golang为我们提供了atomicValue简单好用。
+优化代码：</p>
+<p>附：
+Mutex 与 atomic 效率对比
+BenchmarkPMutexSet-4    20000000             90.2 ns/op
+BenchmarkPMutexGet-4    30000000             57.9 ns/op
+BenchmarkPAtomicSet-4   20000000             72.2 ns/op
+BenchmarkPAtomicGet-4   100000000            12.8 ns/op</p>
+<p>代码分析：
+代码底层保证了我们提到的两点： 1. 调度准确   2. 底层一致  。</p>
+<p>const MaxUintptr = ^uintptr(0)</p>
+<p>图中框起来的分为两部分：
+runtime_procPin()   runtime_procUnpin()
+这里可以在 runtime/proc.go 看到是将 mp 之间进行了锁定，保证了调度时不会出错</p>
+<p>CompareAndSwapPointer()  StorePointer()
+这里实际是使用了 writeBarrier 、 atomicwb() 从应用层使用了写屏障，并看到编译器用了汇编的LOCK和CMPXCHGO 比较和交换，保证了底层的一致性。</p>
+<p>场景
+当碰到使用一些变量被多个协程访问，变量会被多次赋值时，需要注意使用AtomicValue保证原子性。
+同时很多sync.RWMutext可以根据具体场景替换为AtomicValue、channel。
+比如可以用作保存配置信息，在项目初始化时拉取，开协程随时间推移而定时更新。
+或者处理一些统计的计算任务，假如要统计接口访问量、错误率这些东西，每次访问操作网络存储设备代价较大，应暂存在进程内缓存中，而避免++这种操作造成的并发错误，最常用的就是atomic包提供的原子性的函数。
+变量只要涉及多协程计算，都必须保证其原子性。</p>
+<p>如下就是个错误的、需要改成原子访问的例子：</p>
+<p>还有就是不要存储不同类型：</p>
+<p>官方只提供了atomic.value 其没有具体类型，可以根据atomic包的具体类型的相关操作，封装一些自己的“atomic.Int32”类型，方便使用。
+参考：  <a href="https://github.com/uber-go/atomic">https://github.com/uber-go/atomic</a></p>
+
+  </article>
+
+  
+  
+  
+
+
+</div>
+
+  </main><div class="footer gradient-2">
+  <div class="container footer-container ">
+    <div class="row">
+      <div class="col-xs-4 col-sm-3 col-md-3 col-lg-3">
+        <div class="footer-title">网站地图</div>
+        <ul class="list-unstyled">
+            
+              
+                <li><a href="https://miyabyte.github.io/tags/">标签</a></li>
+              
+              
+                <li><a href="https://miyabyte.github.io/categories/">分类</a></li>
+              
+            
+            
+            
+            <li><a rel="alternate" type="application/rss&#43;xml" href="https://miyabyte.github.io/index.xml"><i class="fas fa-rss-square"></i> RSS订阅</a></li>
+            
+            
+            
+        </ul>
+      </div>
+      <div class="col-xs-4 col-sm-3 col-md-3 col-lg-3">
+        
+      </div>
+      <div class="col-xs-4 col-sm-3 col-md-3 col-lg-3">
+        
+      </div> 
+      <div class="col-xs-12 col-sm-3 col-md-3 col-lg-3">
+        <p class="pull-right text-right">
+          <small><em>Proudly powered by <a href="https://gohugo.io/" rel="noopener" target="_blank">Hugo</a></em></small><br/>
+          <small><em>Theme - <a href="https://github.com/shaform/hugo-theme-den" rel="noopener" target="_blank">Den</a></em></small><br/>
+          <small>
+            &copy; 
+            
+            2022
+          </small>
+          
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
+
+</body>
+</html>
