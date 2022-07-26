@@ -17,5 +17,14 @@
 a </description>
     </item>
     
+    <item>
+      <title>go之atomic.value</title>
+      <link>https://miyabyte.github.io/posts/go%E4%B9%8Batomic.value/</link>
+      <pubDate>Thu, 21 Jul 2022 15:05:00 +0800</pubDate>
+      
+      <guid>https://miyabyte.github.io/posts/go%E4%B9%8Batomic.value/</guid>
+      <description>引言： Golang是一个静态类型的编译语言，有着多线程的GMP模型，可以使用go关键字很方便地实现多线程运算，将运算同时作用在不同物理处理器</description>
+    </item>
+    
   </channel>
 </rss>
